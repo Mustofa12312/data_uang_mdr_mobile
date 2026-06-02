@@ -15,10 +15,7 @@ class TransaksiRepository {
   }) async {
     var q = supabase
         .from('transaksi')
-        .select('*, instansi:instansi_id(nama_instansi, kode_instansi)')
-        .order('tanggal', ascending: !orderDesc)
-        .order('created_at', ascending: !orderDesc)
-        .limit(limit);
+        .select('*, instansi:instansi_id(nama_instansi, kode_instansi)');
 
     if (instansiId != null && instansiId.isNotEmpty) {
       q = q.eq('instansi_id', instansiId);
@@ -35,7 +32,11 @@ class TransaksiRepository {
     if (tglMulai != null) q = q.gte('tanggal', tglMulai);
     if (tglAkhir != null) q = q.lte('tanggal', tglAkhir);
 
-    final res = await q;
+    final res = await q
+        .order('tanggal', ascending: !orderDesc)
+        .order('created_at', ascending: !orderDesc)
+        .limit(limit);
+
     return (res as List).map((e) => TransaksiModel.fromJson(e)).toList();
   }
 
