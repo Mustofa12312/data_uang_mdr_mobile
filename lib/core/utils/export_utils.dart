@@ -120,7 +120,6 @@ class ExportUtils {
               ],
             ],
             border: pw.TableBorder.all(width: 0.5, color: PdfColors.grey600),
-            headerCellPadding: const pw.EdgeInsets.all(4),
             cellPadding: const pw.EdgeInsets.all(4),
           ),
           pw.SizedBox(height: 15),
