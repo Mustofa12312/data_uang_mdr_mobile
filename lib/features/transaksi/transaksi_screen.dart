@@ -179,35 +179,38 @@ class _ActiveFilterChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chips = <Widget>[];
+
+    if (filter.bulanHijriyah != null) {
+      chips.add(Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Chip(
+          label: Text(filter.bulanHijriyah!),
+          deleteIcon: const Icon(Icons.close, size: 14),
+          onDeleted: () => ref.read(transaksiFilterProvider.notifier)
+              .update((s) => s.copyWith(clearBulan: true)),
+        ),
+      ));
+    }
+
+    if (filter.instansiId != null) {
+      final inst = instansiList.cast<dynamic>().firstWhere(
+        (e) => e.id == filter.instansiId, orElse: () => null,
+      );
+      if (inst != null) {
+        chips.add(Chip(
+          label: Text(inst.namaInstansi as String? ?? ''),
+          deleteIcon: const Icon(Icons.close, size: 14),
+          onDeleted: () => ref.read(transaksiFilterProvider.notifier)
+              .update((s) => s.copyWith(clearInstansi: true)),
+        ));
+      }
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          if (filter.bulanHijriyah != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Chip(
-                label: Text(filter.bulanHijriyah!),
-                deleteIcon: const Icon(Icons.close, size: 14),
-                onDeleted: () => ref.read(transaksiFilterProvider.notifier)
-                    .update((s) => s.copyWith(clearBulan: true)),
-              ),
-            ),
-          if (filter.instansiId != null) ...[
-            final inst = (instansiList as List).firstWhere(
-              (e) => e.id == filter.instansiId, orElse: () => null,
-            ),
-            if (inst != null)
-              Chip(
-                label: Text(inst.namaInstansi ?? ''),
-                deleteIcon: const Icon(Icons.close, size: 14),
-                onDeleted: () => ref.read(transaksiFilterProvider.notifier)
-                    .update((s) => s.copyWith(clearInstansi: true)),
-              ),
-          ],
-        ],
-      ),
+      child: Row(children: chips),
     );
   }
 }

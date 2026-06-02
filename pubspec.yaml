@@ -25,7 +25,7 @@ dependencies:
 
   # Fonts & Icons
   google_fonts: ^6.2.1
-  iconsax_flutter: ^1.1.2
+  iconsax_flutter: ^1.0.1
 
   # PDF & Export
   pdf: ^3.11.1
