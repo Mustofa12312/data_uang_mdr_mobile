@@ -44,8 +44,8 @@ class LaporanScreen extends ConsumerWidget {
                         const DropdownMenuItem(
                             value: null, child: Text('-- Semua --')),
                         ...instansiList.map((i) => DropdownMenuItem(
-                            value: i.id as String,
-                            child: Text(i.namaInstansi as String))),
+                            value: i.id,
+                            child: Text(i.namaInstansi))),
                       ],
                       onChanged: (v) => ref
                           .read(laporanFilterProvider.notifier)

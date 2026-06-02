@@ -199,7 +199,7 @@ class _ActiveFilterChips extends StatelessWidget {
       );
       if (inst != null) {
         chips.add(Chip(
-          label: Text(inst.namaInstansi as String? ?? ''),
+          label: Text(inst.namaInstansi ?? ''),
           deleteIcon: const Icon(Icons.close, size: 14),
           onDeleted: () => ref.read(transaksiFilterProvider.notifier)
               .update((s) => s.copyWith(clearInstansi: true)),
