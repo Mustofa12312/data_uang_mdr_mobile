@@ -13,24 +13,71 @@ class LaporanScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dashboardAsync = ref.watch(dashboardProvider);
+    final laporanAsync   = ref.watch(laporanProvider);
+    final filter         = ref.watch(laporanFilterProvider);
     final profile        = ref.watch(profileProvider).valueOrNull;
+    final pengaturan     = ref.watch(pengaturanProvider).valueOrNull;
+    final instansiList   = ref.watch(instansiListProvider).valueOrNull ?? [];
+
+    final activeTahun = filter.tahunHijriyah ?? pengaturan?.tahunAktif ?? '1446';
 
     return Scaffold(
       appBar: const SikapAppBar(title: AppStrings.laporan, showBack: false),
-      body: dashboardAsync.when(
-        loading: () => ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: 4,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (_, __) => const ShimmerCard(height: 100),
-        ),
-        error: (e, _) => EmptyState(message: 'Gagal memuat', subtitle: e.toString()),
-        data: (data) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // ── Ringkasan Keuangan ──
-            SectionHeader(title: 'Ringkasan Keuangan', subtitle: 'Tahun 1446 H'),
+      body: Column(
+        children: [
+          // ── Controls ──
+          Container(
+            color: AppColors.dark800,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                if (profile?.isSuperAdmin == true) ...[
+                  Expanded(
+                    flex: 2,
+                    child: DropdownButtonFormField<String>(
+                      value: filter.instansiId,
+                      dropdownColor: AppColors.dark700,
+                      decoration: const InputDecoration(labelText: 'Instansi', isDense: true),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('-- Semua --')),
+                        ...instansiList.map((i) => DropdownMenuItem(value: i.id as String, child: Text(i.namaInstansi as String))),
+                      ],
+                      onChanged: (v) => ref.read(laporanFilterProvider.notifier).update((s) =>
+                        v == null ? s.copyWith(clearInstansi: true) : s.copyWith(instansiId: v)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: TextFormField(
+                    key: ValueKey(activeTahun),
+                    initialValue: activeTahun,
+                    style: const TextStyle(color: Colors.white),
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Tahun H', isDense: true),
+                    onChanged: (v) => ref.read(laporanFilterProvider.notifier)
+                        .update((s) => s.copyWith(tahunHijriyah: v)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // ── Content ──
+          Expanded(
+            child: laporanAsync.when(
+              loading: () => ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: 4,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (_, __) => const ShimmerCard(height: 100),
+              ),
+              error: (e, _) => EmptyState(message: 'Gagal memuat', subtitle: e.toString()),
+              data: (data) => ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // ── Ringkasan Keuangan ──
+                  SectionHeader(title: 'Ringkasan Keuangan', subtitle: 'Tahun $activeTahun H'),
             const SizedBox(height: 12),
 
             Row(
@@ -177,6 +224,9 @@ class LaporanScreen extends ConsumerWidget {
             const SizedBox(height: 80),
           ],
         ),
+      ),
+          ),
+        ],
       ),
     );
   }

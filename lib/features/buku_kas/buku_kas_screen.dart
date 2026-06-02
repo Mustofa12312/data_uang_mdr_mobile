@@ -8,15 +8,16 @@ import '../../data/models/transaksi_model.dart';
 import '../../data/repositories/transaksi_repository.dart';
 import '../../providers/app_providers.dart';
 import '../../shared/widgets/app_widgets.dart';
-
+import '../../core/utils/export_utils.dart';
+import '../../data/models/profile_model.dart';
 final _bukuKasFilterProvider = StateProvider((_) => _BKUFilter());
 
 class _BKUFilter {
   final String? instansiId;
   final String bulan;
-  final String tahun;
+  final String? tahun; // null means use default from settings
 
-  _BKUFilter({this.instansiId, this.bulan = 'Muharram', this.tahun = '1446'});
+  _BKUFilter({this.instansiId, this.bulan = 'Muharram', this.tahun});
 
   _BKUFilter copyWith({String? instansiId, String? bulan, String? tahun, bool clearInstansi = false}) =>
     _BKUFilter(
@@ -26,23 +27,52 @@ class _BKUFilter {
     );
 }
 
-class BukuKasScreen extends ConsumerWidget {
+class BukuKasScreen extends ConsumerStatefulWidget {
   const BukuKasScreen({super.key});
+  @override
+  ConsumerState<BukuKasScreen> createState() => _BukuKasScreenState();
+}
+
+class _BukuKasScreenState extends ConsumerState<BukuKasScreen> {
+  bool _exporting = false;
+
+  Future<void> _handleExport(bool isPdf, List<TransaksiModel> list, dynamic instansi, String bulan, String tahun, dynamic settings) async {
+    if (list.isEmpty || instansi == null) return;
+    setState(() => _exporting = true);
+    try {
+      if (isPdf) {
+        await ExportUtils.exportBKUPdf(
+          transaksi: list, instansi: instansi, bulan: bulan, 
+          tahun: tahun, settings: settings ?? PengaturanModel.defaultSettings()
+        );
+      } else {
+        await ExportUtils.exportBKUExcel(
+          transaksi: list, instansi: instansi, bulan: bulan, tahun: tahun
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal export: $e'), backgroundColor: AppColors.error));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final filter      = ref.watch(_bukuKasFilterProvider);
     final profile     = ref.watch(profileProvider).valueOrNull;
+    final pengaturan  = ref.watch(pengaturanProvider).valueOrNull;
     final instansiList = ref.watch(instansiListProvider).valueOrNull ?? [];
 
-    // Auto-set instansi untuk non-superadmin
+    final activeTahun = filter.tahun ?? pengaturan?.tahunAktif ?? '1446';
     final effectiveInstansiId = profile?.isSuperAdmin == true ? filter.instansiId : profile?.instansiId;
 
     final transaksiAsync = ref.watch(
       FutureProvider((r) => TransaksiRepository().getAll(
         instansiId: effectiveInstansiId,
         bulanHijriyah: filter.bulan,
-        tahunHijriyah: filter.tahun,
+        tahunHijriyah: activeTahun,
+        orderDesc: false,
       )).future,
     );
 
@@ -90,7 +120,8 @@ class BukuKasScreen extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
-                        initialValue: filter.tahun,
+                        key: ValueKey(activeTahun),
+                        initialValue: activeTahun,
                         style: const TextStyle(color: Colors.white),
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: 'Tahun H', isDense: true),
@@ -99,6 +130,44 @@ class BukuKasScreen extends ConsumerWidget {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                // Export Buttons
+                FutureBuilder<List<TransaksiModel>>(
+                  future: transaksiAsync,
+                  builder: (context, snap) {
+                    final list = snap.data ?? [];
+                    final canExport = list.isNotEmpty && instansiObj != null;
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: canExport && !_exporting ? () => _handleExport(false, list, instansiObj, filter.bulan, activeTahun, pengaturan) : null,
+                            icon: const Icon(Icons.table_chart_rounded, size: 16),
+                            label: const Text('Excel'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.emerald400,
+                              side: BorderSide(color: AppColors.emerald500.withOpacity(0.5)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: canExport && !_exporting ? () => _handleExport(true, list, instansiObj, filter.bulan, activeTahun, pengaturan) : null,
+                            icon: _exporting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                            label: Text(_exporting ? 'Proses...' : 'Print PDF'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.emerald600,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
                 ),
               ],
             ),
@@ -146,7 +215,7 @@ class BukuKasScreen extends ConsumerWidget {
                       child: list.isEmpty
                           ? const EmptyState(message: 'Belum ada transaksi bulan ini', icon: Icons.book_outlined)
                           : _BKUTable(transaksiList: list, instansiObj: instansiObj,
-                              bulan: filter.bulan, tahun: filter.tahun),
+                              bulan: filter.bulan, tahun: activeTahun),
                     ),
                   ],
                 );

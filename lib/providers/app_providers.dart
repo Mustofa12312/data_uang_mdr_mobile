@@ -95,7 +95,7 @@ class DashboardSummary {
 final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
   final profile = await ref.watch(profileProvider.future);
   final pengaturan = await ref.watch(pengaturanProvider.future);
-  final tahun = pengaturan?.tahunAktif ?? '1446';
+  final tahun = pengaturan.tahunAktif;
   final instansiId = profile?.isSuperAdmin == true ? null : profile?.instansiId;
 
   final repo = TransaksiRepository();
@@ -133,5 +133,61 @@ final dashboardProvider = FutureProvider<DashboardSummary>((ref) async {
     saldo:           totalPem - totalPen,
     chartData:       chartData,
     recentTransaksi: recent,
+  );
+});
+
+// ─── Laporan Filter & Provider ───────────────────────────────
+class LaporanFilter {
+  final String? instansiId;
+  final String? tahunHijriyah;
+
+  const LaporanFilter({this.instansiId, this.tahunHijriyah});
+
+  LaporanFilter copyWith({String? instansiId, String? tahunHijriyah, bool clearInstansi = false}) => 
+    LaporanFilter(
+      instansiId: clearInstansi ? null : instansiId ?? this.instansiId,
+      tahunHijriyah: tahunHijriyah ?? this.tahunHijriyah,
+    );
+}
+
+final laporanFilterProvider = StateProvider<LaporanFilter>((ref) => const LaporanFilter());
+
+final laporanProvider = FutureProvider<DashboardSummary>((ref) async {
+  final profile = await ref.watch(profileProvider.future);
+  final pengaturan = await ref.watch(pengaturanProvider.future);
+  final filter = ref.watch(laporanFilterProvider);
+  
+  final tahun = filter.tahunHijriyah ?? pengaturan.tahunAktif;
+  final effectiveInstansiId = profile?.isSuperAdmin == true ? filter.instansiId : profile?.instansiId;
+
+  final repo = TransaksiRepository();
+  final summary = await repo.getSummary(instansiId: effectiveInstansiId, tahunHijriyah: tahun);
+  
+  int totalPem = 0, totalPen = 0;
+  final Map<String, Map<String, int>> byBulan = {};
+
+  for (final row in summary) {
+    final nominal = (row['nominal'] as num).toInt();
+    final jenis = row['jenis'] as String;
+    final bulan = row['bulan_hijriyah'] as String? ?? '';
+
+    if (jenis == 'pemasukan') totalPem += nominal;
+    else totalPen += nominal;
+
+    byBulan.putIfAbsent(bulan, () => {'pem': 0, 'pen': 0});
+    byBulan[bulan]![jenis == 'pemasukan' ? 'pem' : 'pen'] =
+        (byBulan[bulan]![jenis == 'pemasukan' ? 'pem' : 'pen'] ?? 0) + nominal;
+  }
+
+  final chartData = byBulan.entries
+      .map((e) => {'bulan': e.key, 'pem': e.value['pem'] ?? 0, 'pen': e.value['pen'] ?? 0})
+      .toList();
+
+  return DashboardSummary(
+    totalPemasukan:  totalPem,
+    totalPengeluaran: totalPen,
+    saldo:           totalPem - totalPen,
+    chartData:       chartData,
+    recentTransaksi: const [], // Not needed for laporan
   );
 });
