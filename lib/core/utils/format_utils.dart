@@ -7,11 +7,6 @@ class FormatUtils {
     decimalDigits: 0,
   );
 
-  static final _rupiahCompact = NumberFormat.compactCurrency(
-    locale: 'id_ID',
-    symbol: 'Rp ',
-    decimalDigits: 1,
-  );
 
   static String rupiah(num? value) {
     if (value == null) return 'Rp 0';
