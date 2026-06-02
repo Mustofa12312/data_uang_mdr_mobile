@@ -198,15 +198,15 @@ class ExportUtils {
     final String kodeInstansi = (instansi != null && instansi.runtimeType != String) ? (instansi.kodeInstansi ?? 'INST') : 'INST';
 
     // Headers & Info
-    sheet.appendRow([const TextCellValue('BUKU KAS UMUM')]);
+    sheet.appendRow([TextCellValue('BUKU KAS UMUM')]);
     sheet.appendRow([]);
-    sheet.appendRow([const TextCellValue('Nama Madrasah'), const TextCellValue(':'), TextCellValue(namaInstansi), const TextCellValue(''), const TextCellValue('Bulan'), const TextCellValue(':'), TextCellValue(bulan)]);
-    sheet.appendRow([const TextCellValue("Desa/Kecamatan"), const TextCellValue(':'), const TextCellValue("Blu'uran, Karang Penang"), const TextCellValue(''), const TextCellValue('Halaman'), const TextCellValue(':'), const TextCellValue('')]);
-    sheet.appendRow([const TextCellValue('Kabupaten'), const TextCellValue(':'), const TextCellValue('Sampang')]);
+    sheet.appendRow([TextCellValue('Nama Madrasah'), TextCellValue(':'), TextCellValue(namaInstansi), TextCellValue(''), TextCellValue('Bulan'), TextCellValue(':'), TextCellValue(bulan)]);
+    sheet.appendRow([TextCellValue("Desa/Kecamatan"), TextCellValue(':'), TextCellValue("Blu'uran, Karang Penang"), TextCellValue(''), TextCellValue('Halaman'), TextCellValue(':'), TextCellValue('')]);
+    sheet.appendRow([TextCellValue('Kabupaten'), TextCellValue(':'), TextCellValue('Sampang')]);
     sheet.appendRow([]);
     sheet.appendRow([
-      const TextCellValue('Tanggal (Masehi)'), const TextCellValue('Tanggal (Hijriyah)'), const TextCellValue('No. Kode'), const TextCellValue('No. Bukti'),
-      const TextCellValue('URAIAN'), const TextCellValue('SUMBER DANA'), const TextCellValue('Penerimaan (Rp)'), const TextCellValue('Pengeluaran (Rp)'), const TextCellValue('Saldo (Rp)')
+      TextCellValue('Tanggal (Masehi)'), TextCellValue('Tanggal (Hijriyah)'), TextCellValue('No. Kode'), TextCellValue('No. Bukti'),
+      TextCellValue('URAIAN'), TextCellValue('SUMBER DANA'), TextCellValue('Penerimaan (Rp)'), TextCellValue('Pengeluaran (Rp)'), TextCellValue('Saldo (Rp)')
     ]);
     sheet.appendRow([IntCellValue(1), IntCellValue(2), IntCellValue(3), IntCellValue(4), IntCellValue(5), IntCellValue(6), IntCellValue(7), IntCellValue(8), IntCellValue(9)]);
 
@@ -222,8 +222,8 @@ class ExportUtils {
         TextCellValue(t.nomorBukti ?? ''),
         TextCellValue(t.uraian),
         TextCellValue(t.sumberDana ?? ''),
-        t.isPemasukan ? IntCellValue(t.nominal) : const TextCellValue(''),
-        t.isPengeluaran ? IntCellValue(t.nominal) : const TextCellValue(''),
+        t.isPemasukan ? IntCellValue(t.nominal) : TextCellValue(''),
+        t.isPengeluaran ? IntCellValue(t.nominal) : TextCellValue(''),
         IntCellValue(saldo),
       ]);
     }
@@ -231,8 +231,8 @@ class ExportUtils {
     final tp = transaksi.where((t) => t.isPemasukan).fold(0, (s, t) => s + t.nominal);
     final tn = transaksi.where((t) => t.isPengeluaran).fold(0, (s, t) => s + t.nominal);
     sheet.appendRow([
-      const TextCellValue(''), const TextCellValue(''), const TextCellValue(''), const TextCellValue(''), const TextCellValue(''), 
-      const TextCellValue('JUMLAH'), IntCellValue(tp), IntCellValue(tn), IntCellValue(tp - tn)
+      TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''), TextCellValue(''), 
+      TextCellValue('JUMLAH'), IntCellValue(tp), IntCellValue(tn), IntCellValue(tp - tn)
     ]);
 
     // Save and Share

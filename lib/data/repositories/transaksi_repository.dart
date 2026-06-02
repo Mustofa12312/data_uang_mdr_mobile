@@ -1,4 +1,3 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/transaksi_model.dart';
 import '../../core/supabase_client.dart';
 
@@ -41,7 +40,8 @@ class TransaksiRepository {
   }
 
   Future<TransaksiModel> create(Map<String, dynamic> payload) async {
-    final res = await supabase.from('transaksi').insert(payload).select().single();
+    final res =
+        await supabase.from('transaksi').insert(payload).select().single();
     return TransaksiModel.fromJson(res);
   }
 
