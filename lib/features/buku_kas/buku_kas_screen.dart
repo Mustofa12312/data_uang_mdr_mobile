@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_strings.dart';
+import '../../core/utils/format_utils.dart';
+import '../../data/models/transaksi_model.dart';
+import '../../data/repositories/transaksi_repository.dart';
+import '../../providers/app_providers.dart';
+import '../../shared/widgets/app_widgets.dart';
+
+final _bukuKasFilterProvider = StateProvider((_) => _BKUFilter());
+
+class _BKUFilter {
+  final String? instansiId;
+  final String bulan;
+  final String tahun;
+
+  _BKUFilter({this.instansiId, this.bulan = 'Muharram', this.tahun = '1446'});
+
+  _BKUFilter copyWith({String? instansiId, String? bulan, String? tahun, bool clearInstansi = false}) =>
+    _BKUFilter(
+      instansiId: clearInstansi ? null : instansiId ?? this.instansiId,
+      bulan: bulan ?? this.bulan,
+      tahun: tahun ?? this.tahun,
+    );
+}
+
+class BukuKasScreen extends ConsumerWidget {
+  const BukuKasScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter      = ref.watch(_bukuKasFilterProvider);
+    final profile     = ref.watch(profileProvider).valueOrNull;
+    final instansiList = ref.watch(instansiListProvider).valueOrNull ?? [];
+
+    // Auto-set instansi untuk non-superadmin
+    final effectiveInstansiId = profile?.isSuperAdmin == true ? filter.instansiId : profile?.instansiId;
+
+    final transaksiAsync = ref.watch(
+      FutureProvider((r) => TransaksiRepository().getAll(
+        instansiId: effectiveInstansiId,
+        bulanHijriyah: filter.bulan,
+        tahunHijriyah: filter.tahun,
+      )).future,
+    );
+
+    final instansiObj = effectiveInstansiId != null
+        ? instansiList.cast<dynamic>().firstWhere((i) => i.id == effectiveInstansiId, orElse: () => null)
+        : null;
+
+    return Scaffold(
+      appBar: const SikapAppBar(title: AppStrings.bukuKas, showBack: false),
+      body: Column(
+        children: [
+          // Controls
+          Container(
+            color: AppColors.dark800,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Column(
+              children: [
+                if (profile?.isSuperAdmin == true)
+                  DropdownButtonFormField<String>(
+                    value: filter.instansiId,
+                    dropdownColor: AppColors.dark700,
+                    decoration: const InputDecoration(labelText: 'Instansi', isDense: true),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('-- Pilih Instansi --')),
+                      ...instansiList.map((i) => DropdownMenuItem(value: i.id as String, child: Text(i.namaInstansi as String))),
+                    ],
+                    onChanged: (v) => ref.read(_bukuKasFilterProvider.notifier).update((s) =>
+                      v == null ? s.copyWith(clearInstansi: true) : s.copyWith(instansiId: v)),
+                  ),
+                if (profile?.isSuperAdmin == true) const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: DropdownButtonFormField<String>(
+                        value: filter.bulan,
+                        dropdownColor: AppColors.dark700,
+                        decoration: const InputDecoration(labelText: 'Bulan', isDense: true),
+                        items: AppStrings.bulanHijriyah.map((b) =>
+                          DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 13)))).toList(),
+                        onChanged: (v) => ref.read(_bukuKasFilterProvider.notifier)
+                            .update((s) => s.copyWith(bulan: v)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        initialValue: filter.tahun,
+                        style: const TextStyle(color: Colors.white),
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Tahun H', isDense: true),
+                        onChanged: (v) => ref.read(_bukuKasFilterProvider.notifier)
+                            .update((s) => s.copyWith(tahun: v)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // BKU Content
+          Expanded(
+            child: FutureBuilder<List<TransaksiModel>>(
+              future: transaksiAsync,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: AppColors.emerald500));
+                }
+                if (snap.hasError) return EmptyState(message: 'Gagal memuat', subtitle: snap.error.toString());
+
+                final list = snap.data ?? [];
+
+                if (effectiveInstansiId == null && profile?.isSuperAdmin == true) {
+                  return const EmptyState(message: 'Pilih instansi terlebih dahulu', icon: Icons.business_rounded);
+                }
+
+                final totalPem = list.where((t) => t.isPemasukan).fold(0, (s, t) => s + t.nominal);
+                final totalPen = list.where((t) => t.isPengeluaran).fold(0, (s, t) => s + t.nominal);
+                final saldo    = totalPem - totalPen;
+
+                return Column(
+                  children: [
+                    // Summary strip
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      color: AppColors.dark800.withOpacity(0.5),
+                      child: Row(
+                        children: [
+                          _SummaryChip(label: 'Masuk', value: totalPem, color: AppColors.emerald400),
+                          const SizedBox(width: 8),
+                          _SummaryChip(label: 'Keluar', value: totalPen, color: AppColors.error),
+                          const SizedBox(width: 8),
+                          _SummaryChip(label: 'Saldo', value: saldo, color: AppColors.info),
+                        ],
+                      ),
+                    ),
+
+                    // BKU Table
+                    Expanded(
+                      child: list.isEmpty
+                          ? const EmptyState(message: 'Belum ada transaksi bulan ini', icon: Icons.book_outlined)
+                          : _BKUTable(transaksiList: list, instansiObj: instansiObj,
+                              bulan: filter.bulan, tahun: filter.tahun),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  const _SummaryChip({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Text(label, style: TextStyle(fontSize: 10, color: color.withOpacity(0.8))),
+            const SizedBox(height: 2),
+            Text(FormatUtils.rupiahCompact(value),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BKUTable extends StatelessWidget {
+  final List<TransaksiModel> transaksiList;
+  final dynamic instansiObj;
+  final String bulan;
+  final String tahun;
+
+  const _BKUTable({required this.transaksiList, this.instansiObj, required this.bulan, required this.tahun});
+
+  @override
+  Widget build(BuildContext context) {
+    int runSaldo = 0;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.all(12),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Header Info
+            Container(
+              width: 820,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.dark800,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                border: Border.all(color: AppColors.dark600.withOpacity(0.5)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('BUKU KAS UMUM',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 2)),
+                  const SizedBox(height: 6),
+                  Text('Instansi: ${instansiObj?.namaInstansi ?? '-'}  |  Bulan: $bulan $tahun H',
+                    style: const TextStyle(color: AppColors.dark400, fontSize: 12)),
+                ],
+              ),
+            ),
+
+            // Table Header
+            Container(
+              width: 820,
+              color: AppColors.emerald800.withOpacity(0.4),
+              child: Row(children: _headers.map((h) => _HeaderCell(text: h.label, flex: h.flex)).toList()),
+            ),
+
+            // Rows
+            Container(
+              width: 820,
+              decoration: BoxDecoration(
+                color: AppColors.dark800,
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                border: Border.all(color: AppColors.dark600.withOpacity(0.5)),
+              ),
+              child: Column(
+                children: transaksiList.map((t) {
+                  if (t.isPemasukan) runSaldo += t.nominal;
+                  else runSaldo -= t.nominal;
+                  return _BKURow(transaksi: t, runSaldo: runSaldo);
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const _headers = [
+    _ColDef('Tgl Masehi', 1), _ColDef('Tgl Hijriyah', 1), _ColDef('Kode', 1),
+    _ColDef('Bukti', 1), _ColDef('Uraian', 2), _ColDef('Sumber', 1),
+    _ColDef('Pemasukan', 1), _ColDef('Pengeluaran', 1), _ColDef('Saldo', 1),
+  ];
+}
+
+class _ColDef {
+  final String label;
+  final int flex;
+  const _ColDef(this.label, this.flex);
+}
+
+class _HeaderCell extends StatelessWidget {
+  final String text;
+  final int flex;
+  const _HeaderCell({required this.text, required this.flex});
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        child: Text(text, style: const TextStyle(color: AppColors.emerald400, fontSize: 11, fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+      ),
+    );
+  }
+}
+
+class _BKURow extends StatelessWidget {
+  final TransaksiModel transaksi;
+  final int runSaldo;
+  const _BKURow({required this.transaksi, required this.runSaldo});
+
+  @override
+  Widget build(BuildContext context) {
+    final isPem = transaksi.isPemasukan;
+    return Container(
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: AppColors.dark700.withOpacity(0.4)))),
+      child: Row(
+        children: [
+          _Cell(transaksi.tanggal ?? '', 1),
+          _Cell(transaksi.tanggalHijriyah ?? '', 1),
+          _Cell(transaksi.kodeTransaksi ?? '', 1),
+          _Cell(transaksi.nomorBukti ?? '', 1),
+          _Cell(transaksi.uraian, 2, bold: false),
+          _Cell(transaksi.sumberDana ?? '', 1),
+          _Cell(isPem ? FormatUtils.rupiahCompact(transaksi.nominal) : '', 1, color: AppColors.emerald400),
+          _Cell(!isPem ? FormatUtils.rupiahCompact(transaksi.nominal) : '', 1, color: AppColors.error),
+          _Cell(FormatUtils.rupiahCompact(runSaldo), 1, color: AppColors.info),
+        ],
+      ),
+    );
+  }
+}
+
+class _Cell extends StatelessWidget {
+  final String text;
+  final int flex;
+  final bool bold;
+  final Color? color;
+  const _Cell(this.text, this.flex, {this.bold = false, this.color});
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        child: Text(text,
+          style: TextStyle(fontSize: 11, color: color ?? AppColors.dark200,
+            fontWeight: bold ? FontWeight.w600 : FontWeight.normal),
+          maxLines: 2, overflow: TextOverflow.ellipsis),
+      ),
+    );
+  }
+}
