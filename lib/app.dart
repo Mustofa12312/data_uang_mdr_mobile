@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/app_strings.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/splash_screen.dart';
@@ -50,10 +51,22 @@ class _AppShell extends StatelessWidget {
   }
 }
 
-// ── Router ───────────────────────────────────────────────────
-GoRouter _buildRouter(WidgetRef ref) {
+// ── Router Notifier ────────────────────────────────────────────
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterNotifier(this._ref) {
+    _ref.listen<AsyncValue<User?>>(authProvider, (_, __) => notifyListeners());
+  }
+}
+
+// ── Router Provider ──────────────────────────────────────────
+final routerProvider = Provider<GoRouter>((ref) {
+  final notifier = RouterNotifier(ref);
+
   return GoRouter(
     initialLocation: AppStrings.routeSplash,
+    refreshListenable: notifier,
     redirect: (context, state) {
       final user = ref.read(authProvider).valueOrNull;
       final isAuth = user != null;
@@ -88,7 +101,7 @@ GoRouter _buildRouter(WidgetRef ref) {
       ),
     ],
   );
-}
+});
 
 // ── Root App ─────────────────────────────────────────────────
 class SikapApp extends ConsumerWidget {
@@ -97,7 +110,7 @@ class SikapApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark  = ref.watch(themeModeProvider);
-    final router  = _buildRouter(ref);
+    final router  = ref.watch(routerProvider);
 
     return MaterialApp.router(
       title: AppStrings.appFullName,
