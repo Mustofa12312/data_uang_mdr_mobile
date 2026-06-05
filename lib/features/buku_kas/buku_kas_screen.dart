@@ -31,6 +31,22 @@ class _BKUFilter {
       );
 }
 
+final bukuKasListProvider = FutureProvider.autoDispose<List<TransaksiModel>>((ref) async {
+  final filter = ref.watch(_bukuKasFilterProvider);
+  final profile = await ref.watch(profileProvider.future);
+  final pengaturan = await ref.watch(pengaturanProvider.future);
+  
+  final activeTahun = filter.tahun ?? pengaturan.tahunAktif;
+  final effectiveInstansiId = profile?.isSuperAdmin == true ? filter.instansiId : profile?.instansiId;
+
+  return TransaksiRepository().getAll(
+    instansiId: effectiveInstansiId,
+    bulanHijriyah: filter.bulan,
+    tahunHijriyah: activeTahun,
+    orderDesc: false,
+  );
+});
+
 class BukuKasScreen extends ConsumerStatefulWidget {
   const BukuKasScreen({super.key});
   @override
@@ -77,14 +93,7 @@ class _BukuKasScreenState extends ConsumerState<BukuKasScreen> {
     final effectiveInstansiId =
         profile?.isSuperAdmin == true ? filter.instansiId : profile?.instansiId;
 
-    final transaksiAsync = ref.watch(
-      FutureProvider((r) => TransaksiRepository().getAll(
-            instansiId: effectiveInstansiId,
-            bulanHijriyah: filter.bulan,
-            tahunHijriyah: activeTahun,
-            orderDesc: false,
-          )).future,
-    );
+    final transaksiAsyncValue = ref.watch(bukuKasListProvider);
 
     final instansiObj = effectiveInstansiId != null
         ? instansiList
@@ -160,85 +169,76 @@ class _BukuKasScreenState extends ConsumerState<BukuKasScreen> {
                 ),
                 const SizedBox(height: 12),
                 // Export Buttons
-                FutureBuilder<List<TransaksiModel>>(
-                    future: transaksiAsync,
-                    builder: (context, snap) {
-                      final list = snap.data ?? [];
-                      final canExport = list.isNotEmpty && instansiObj != null;
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: canExport && !_exporting
-                                  ? () => _handleExport(
-                                      false,
-                                      list,
-                                      instansiObj,
-                                      filter.bulan,
-                                      activeTahun,
-                                      pengaturan)
-                                  : null,
-                              icon: const Icon(Icons.table_chart_rounded,
+                () {
+                  final list = transaksiAsyncValue.valueOrNull ?? [];
+                  final canExport = list.isNotEmpty && instansiObj != null;
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: canExport && !_exporting
+                              ? () => _handleExport(
+                                  false,
+                                  list,
+                                  instansiObj,
+                                  filter.bulan,
+                                  activeTahun,
+                                  pengaturan)
+                              : null,
+                          icon: const Icon(Icons.table_chart_rounded,
+                              size: 16),
+                          label: const Text('Excel'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.emerald400,
+                            side: BorderSide(
+                                color:
+                                    AppColors.emerald500.withOpacity(0.5)),
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: canExport && !_exporting
+                              ? () => _handleExport(true, list, instansiObj,
+                                  filter.bulan, activeTahun, pengaturan)
+                              : null,
+                          icon: _exporting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))
+                              : const Icon(Icons.picture_as_pdf_rounded,
                                   size: 16),
-                              label: const Text('Excel'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.emerald400,
-                                side: BorderSide(
-                                    color:
-                                        AppColors.emerald500.withOpacity(0.5)),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
+                          label:
+                              Text(_exporting ? 'Proses...' : 'Print PDF'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.emerald600,
+                            foregroundColor: Colors.white,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: canExport && !_exporting
-                                  ? () => _handleExport(true, list, instansiObj,
-                                      filter.bulan, activeTahun, pengaturan)
-                                  : null,
-                              icon: _exporting
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2))
-                                  : const Icon(Icons.picture_as_pdf_rounded,
-                                      size: 16),
-                              label:
-                                  Text(_exporting ? 'Proses...' : 'Print PDF'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.emerald600,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }),
+                        ),
+                      ),
+                    ],
+                  );
+                }(),
               ],
             ),
           ),
 
           // BKU Content
           Expanded(
-            child: FutureBuilder<List<TransaksiModel>>(
-              future: transaksiAsync,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.emerald500));
-                }
-                if (snap.hasError)
-                  return EmptyState(
-                      message: 'Gagal memuat', subtitle: snap.error.toString());
-
-                final list = snap.data ?? [];
-
+            child: transaksiAsyncValue.when(
+              loading: () => const Center(
+                  child: CircularProgressIndicator(
+                      color: AppColors.emerald500)),
+              error: (error, stack) => EmptyState(
+                  message: 'Gagal memuat', subtitle: error.toString()),
+              data: (list) {
                 if (effectiveInstansiId == null &&
                     profile?.isSuperAdmin == true) {
                   return const EmptyState(
