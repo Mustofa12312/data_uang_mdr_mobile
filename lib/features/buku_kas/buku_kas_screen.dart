@@ -9,6 +9,7 @@ import '../../providers/app_providers.dart';
 import '../../shared/widgets/app_widgets.dart';
 import '../../core/utils/export_utils.dart';
 import '../../data/models/profile_model.dart';
+import '../../core/utils/logger.dart';
 
 final _bukuKasFilterProvider = StateProvider((_) => _BKUFilter());
 
@@ -33,11 +34,13 @@ class _BKUFilter {
 
 final bukuKasListProvider = FutureProvider.autoDispose<List<TransaksiModel>>((ref) async {
   final filter = ref.watch(_bukuKasFilterProvider);
-  final profile = await ref.watch(profileProvider.future);
-  final pengaturan = await ref.watch(pengaturanProvider.future);
+  final profile = ref.watch(profileProvider).valueOrNull;
+  final pengaturan = ref.watch(pengaturanProvider).valueOrNull;
   
-  final activeTahun = filter.tahun ?? pengaturan.tahunAktif;
+  final activeTahun = filter.tahun ?? pengaturan?.tahunAktif ?? '1446';
   final effectiveInstansiId = profile?.isSuperAdmin == true ? filter.instansiId : profile?.instansiId;
+
+  logger.d('bukuKasListProvider Fetching Data -> Instansi: $effectiveInstansiId | Bulan: ${filter.bulan} | Tahun: $activeTahun');
 
   return TransaksiRepository().getAll(
     instansiId: effectiveInstansiId,
@@ -239,6 +242,7 @@ class _BukuKasScreenState extends ConsumerState<BukuKasScreen> {
               error: (error, stack) => EmptyState(
                   message: 'Gagal memuat', subtitle: error.toString()),
               data: (list) {
+                logger.d('UI received ${list.length} transactions for BKU');
                 if (effectiveInstansiId == null &&
                     profile?.isSuperAdmin == true) {
                   return const EmptyState(
